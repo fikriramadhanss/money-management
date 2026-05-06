@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '../db/database';
-import { Trash2, ArrowDownRight, ArrowUpRight, Search, ListFilter, Calendar, History as HistoryIcon } from 'lucide-react';
+import { Trash2, ArrowDownRight, ArrowUpRight, Search, ListFilter, Calendar, History as HistoryIcon, TrendingUp, X } from 'lucide-react';
 
 const inputStyle = {
     width: '100%',
@@ -19,13 +19,15 @@ const inputStyle = {
 export default function History() {
     const transactions = useLiveQuery(() => db.transactions.orderBy('date').reverse().toArray()) || [];
     const wallets = useLiveQuery(() => db.wallets.toArray()) || [];
-    const categories = useLiveQuery(() => db.categories.toArray()) || [];
 
     const [search, setSearch] = useState('');
     const [filterType, setFilterType] = useState('all');
     const [filterWallet, setFilterWallet] = useState('all');
     const [dateFrom, setDateFrom] = useState('');
     const [dateTo, setDateTo] = useState('');
+
+    // State untuk Pop-Up Profit
+    const [profitModal, setProfitModal] = useState({ isOpen: false, tx: null, amount: '', note: '' });
 
     const filteredTransactions = transactions.filter(tx => {
         const matchesSearch = (tx.note?.toLowerCase() || '').includes(search.toLowerCase()) ||
@@ -44,8 +46,71 @@ export default function History() {
         }
     };
 
+    const handleOpenProfitModal = (tx) => {
+        setProfitModal({
+            isOpen: true,
+            tx: tx,
+            amount: '',
+            note: `Take Profit: ${tx.note || tx.category}`
+        });
+    };
+
+    const handleSubmitProfit = async (e) => {
+        e.preventDefault();
+        if (!profitModal.amount || !profitModal.tx) return;
+
+        // Mencatat profit sebagai pemasukan (Income)
+        await db.transactions.add({
+            type: 'income',
+            category: profitModal.tx.category, // Tetap menggunakan kategori saham
+            amount: Number(profitModal.amount),
+            note: profitModal.note,
+            date: new Date().toISOString().split('T')[0], // Dicatat hari ini
+            walletId: profitModal.tx.walletId, // Masuk ke dompet yang sama
+            createdAt: new Date().toISOString(),
+        });
+
+        setProfitModal({ isOpen: false, tx: null, amount: '', note: '' });
+    };
+
     return (
         <div style={{ maxWidth: 960, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
+
+            {/* Modal Pop-up Input Profit */}
+            {profitModal.isOpen && (
+                <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+                    <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', width: '100%', maxWidth: 400, display: 'flex', flexDirection: 'column', boxShadow: 'var(--shadow-lg)' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '24px', borderBottom: '1px solid var(--border)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                                <TrendingUp size={20} color="var(--brand-green)" />
+                                <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>Input Profit Saham</h3>
+                            </div>
+                            <button onClick={() => setProfitModal({ isOpen: false, tx: null, amount: '', note: '' })} style={{ background: 'transparent', border: 'none', color: 'var(--muted)', cursor: 'pointer' }}><X size={20} /></button>
+                        </div>
+
+                        <form onSubmit={handleSubmitProfit} style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                            <div style={{ padding: '12px 16px', background: 'rgba(13, 148, 136, 0.1)', borderRadius: '8px', border: '1px solid rgba(13, 148, 136, 0.2)', marginBottom: 8 }}>
+                                <p style={{ fontSize: 12, color: 'var(--muted)' }}>Investasi Awal:</p>
+                                <p style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{profitModal.tx.note || profitModal.tx.category} (Rp {profitModal.tx.amount.toLocaleString('id-ID')})</p>
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Nominal Profit (Rp)</label>
+                                <input style={{ ...inputStyle, padding: '14px 16px', fontSize: '16px', fontWeight: 600 }} type="number" placeholder="0" min="0" required value={profitModal.amount} onChange={e => setProfitModal({ ...profitModal, amount: e.target.value })} onFocus={(e) => e.target.style.borderColor = 'var(--brand-green)'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
+                            </div>
+
+                            <div>
+                                <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'var(--muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Catatan</label>
+                                <input style={inputStyle} type="text" required value={profitModal.note} onChange={e => setProfitModal({ ...profitModal, note: e.target.value })} onFocus={(e) => e.target.style.borderColor = 'var(--brand-green)'} onBlur={(e) => e.target.style.borderColor = 'var(--border)'} />
+                            </div>
+
+                            <button type="submit" style={{ marginTop: 8, width: '100%', padding: '14px', background: 'linear-gradient(135deg, var(--brand-green), #15803d)', border: 'none', borderRadius: '10px', color: 'white', fontWeight: 600, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 16px rgba(132, 204, 22, 0.25)' }}>
+                                <TrendingUp size={18} /> Simpan Profit ke Pemasukan
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
 
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                 <div style={{ padding: 12, background: 'rgba(13, 148, 136, 0.1)', borderRadius: 16 }}>
@@ -65,7 +130,6 @@ export default function History() {
                     <h3 style={{ fontSize: 16, fontWeight: 600, color: 'var(--text)' }}>Filter Pencarian</h3>
                 </div>
 
-                {/* Perbaikan Layout Filter Menggunakan Flex-Wrap */}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
                     <div style={{ position: 'relative', flex: '1 1 200px' }}>
                         <Search size={16} color="var(--muted)" style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)' }} />
@@ -108,6 +172,8 @@ export default function History() {
                     <div>
                         {filteredTransactions.map(tx => {
                             const walletName = wallets.find(w => w.id === tx.walletId)?.name || 'Dompet Dihapus';
+                            const isSahamExpense = tx.type === 'expense' && tx.category.toLowerCase().includes('saham');
+
                             return (
                                 <div key={tx.id} style={{ padding: '16px 32px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--border)', transition: 'background .2s', gap: 16 }}
                                     onMouseEnter={e => e.currentTarget.style.background = 'var(--bg)'} onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
@@ -123,16 +189,30 @@ export default function History() {
                                             <p style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>{walletName} • {tx.category} • {tx.date}</p>
                                         </div>
                                     </div>
+
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
                                         <span style={{ fontWeight: 600, fontSize: 15, color: tx.type === 'income' ? 'var(--brand-green)' : 'var(--text)' }}>
                                             {tx.type === 'income' ? '+' : '−'} Rp {tx.amount.toLocaleString('id-ID')}
                                         </span>
-                                        <button onClick={() => handleDelete(tx.id)} style={{ width: 36, height: 36, borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s', color: 'var(--muted)' }}
-                                            onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = 'var(--red)'; }}
-                                            onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)'; }}
-                                        >
-                                            <Trash2 size={16} />
-                                        </button>
+
+                                        <div style={{ display: 'flex', gap: 6 }}>
+                                            {/* kalo lu profit disaham */}
+                                            {isSahamExpense && (
+                                                <button onClick={() => handleOpenProfitModal(tx)} title="Take Profit" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(132, 204, 22, 0.1)', border: '1px solid rgba(132, 204, 22, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s', color: 'var(--brand-green)' }}
+                                                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(132, 204, 22, 0.2)'; }}
+                                                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(132, 204, 22, 0.1)'; }}
+                                                >
+                                                    <TrendingUp size={16} />
+                                                </button>
+                                            )}
+
+                                            <button onClick={() => handleDelete(tx.id)} title="Hapus Transaksi" style={{ width: 36, height: 36, borderRadius: 10, background: 'transparent', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all .2s', color: 'var(--muted)' }}
+                                                onMouseEnter={e => { e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)'; e.currentTarget.style.borderColor = 'var(--red)'; e.currentTarget.style.color = 'var(--red)'; }}
+                                                onMouseLeave={e => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.color = 'var(--muted)'; }}
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             );

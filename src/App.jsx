@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Dashboard from './pages/DashboardTemp'
+import Dashboard from './pages/DashboardTemp';
 import Transactions from './pages/Transactions';
 import History from './pages/History';
 import Budgets from './pages/Budgets';
@@ -7,6 +7,7 @@ import Settings from './pages/Settings';
 import Auth from './pages/Auth';
 import Wallets from './pages/Wallets';
 import Profile from './pages/Profile';
+import Goals from './pages/Goals';
 import { useAuthStore } from './store/useAuthStore';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from './db/database';
@@ -25,7 +26,8 @@ import {
   X,
   SearchX,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  Target as TargetIcon
 } from 'lucide-react';
 
 const DUITIN_STYLE = `
@@ -156,6 +158,7 @@ function App() {
     { id: 'budgets', icon: <WalletCards />, label: 'Limit' },
     { id: 'wallets', icon: <CreditCard />, label: 'Dompet' },
     { id: 'settings', icon: <SettingsIcon />, label: 'Pengaturan' },
+    { id: 'goals', icon: <TargetIcon />, label: 'Target' },
   ];
 
   return (
@@ -247,7 +250,7 @@ function App() {
               <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--text)', letterSpacing: '-0.5px' }}>
                 Duitin
               </div>
-              <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Premium Management</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Money Management</div>
             </div>
           </div>
 
@@ -387,6 +390,7 @@ function App() {
               {activeTab === 'settings' && <Settings />}
               {activeTab === 'wallets' && <Wallets />}
               {activeTab === 'profile' && <Profile />}
+              {activeTab === 'goals' && <Goals />}
             </div>
           </main>
         </div>
@@ -415,6 +419,30 @@ function App() {
               isActive={activeTab === 'profile'}
               onClick={() => setActiveTab('profile')}
             />
+            <button
+              onClick={logout}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '10px 12px',
+                borderRadius: 'var(--radius)',
+                border: 'none',
+                cursor: 'pointer',
+                background: 'transparent',
+                color: 'var(--red)',
+                fontFamily: 'inherit',
+                fontWeight: 600,
+                fontSize: '11px',
+                transition: 'all .2s ease',
+                minWidth: 64,
+                scrollSnapAlign: 'start'
+              }}
+            >
+              <LogOut size={20} strokeWidth={2} />
+              <span>Keluar</span>
+            </button>
           </div>
         </nav>
       </div>

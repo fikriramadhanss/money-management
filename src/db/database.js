@@ -7,7 +7,8 @@ db.version(4).stores({
     transactions: '++id, type, category, amount, date, walletId, createdAt',
     categories: '++id, name, type',
     budgets: '++id, category, limitAmount, month',
-    wallets: '++id, name, initialBalance, color, icon'
+    wallets: '++id, name, initialBalance, color, icon',
+    goals: '++id, name, targetAmount, savedAmount, deadline, color, icon'
 });
 
 db.on('populate', async () => {
@@ -19,6 +20,7 @@ db.on('populate', async () => {
     await db.categories.bulkAdd([
         { name: 'Kebutuhan Harian', type: 'expense' },
         { name: 'Tagihan & Subskripsi', type: 'expense' },
+        { name: 'Investasi Saham', type: 'expense' },
         { name: 'Gaji', type: 'income' },
     ]);
 });

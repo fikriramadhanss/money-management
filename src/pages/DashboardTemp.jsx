@@ -4,34 +4,54 @@ import { db } from '../db/database';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line } from 'recharts';
 import { Wallet, TrendingUp, TrendingDown, Activity, BarChart2 } from 'lucide-react';
 
-const COLORS = ['#0d9488', '#84cc16', '#3b82f6', '#1e3a8a', '#f59e0b', '#ef4444'];
+const COLORS = ['#0d9488', '#84cc16', '#3b82f6', '#1e3a8a', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6'];
 
 export default function Dashboard() {
     const transactions = useLiveQuery(() => db.transactions.toArray()) || [];
-    const categories = useLiveQuery(() => db.categories.toArray()) || [];
+    const wallets = useLiveQuery(() => db.wallets.toArray()) || [];
 
-    const [activeMetric, setActiveMetric] = useState('expense');
+    const [activeMetric, setActiveMetric] = useState('balance');
 
-    const totalIncome = transactions.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
-    const totalExpense = transactions.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
-    const balance = totalIncome - totalExpense;
+    const totalInitialBalance = wallets.reduce((sum, w) => sum + (w.initialBalance || 0), 0);
 
-    const expensePieData = categories
-        .filter(c => c.type === 'expense')
-        .map(c => ({
-            name: c.name,
-            value: transactions.filter(t => t.category === c.name && t.type === 'expense').reduce((s, t) => s + t.amount, 0),
-        }))
-        .filter(d => d.value > 0);
+    // Pisahkan transaksi berdasarkan tipe
+    const incomeTxs = transactions.filter(t => t.type === 'income');
+    const expenseTxs = transactions.filter(t => t.type === 'expense');
+
+    const totalIncome = incomeTxs.reduce((s, t) => s + t.amount, 0);
+    const totalExpense = expenseTxs.reduce((s, t) => s + t.amount, 0);
+    const balance = totalInitialBalance + totalIncome - totalExpense;
+
+    // Distribusi Pengeluaran (Ditarik dinamis langsung dari riwayat transaksi)
+    const expenseCategories = [...new Set(expenseTxs.map(t => t.category))];
+    const expensePieData = expenseCategories.map(cat => ({
+        name: cat,
+        value: expenseTxs.filter(t => t.category === cat).reduce((s, t) => s + t.amount, 0),
+    })).filter(d => d.value > 0);
+
+    // Distribusi Pemasukan (Profit Saham otomatis masuk ke sini)
+    const incomeCategories = [...new Set(incomeTxs.map(t => t.category))];
+    const incomePieData = incomeCategories.map(cat => ({
+        name: cat,
+        value: incomeTxs.filter(t => t.category === cat).reduce((s, t) => s + t.amount, 0),
+    })).filter(d => d.value > 0);
 
     const dates = [...new Set(transactions.map(t => t.date))].sort().slice(-14);
+    const oldestDateInView = dates[0] || new Date().toISOString().split('T')[0];
 
-    let runningBalance = 0;
+    const txsBeforeView = transactions.filter(t => t.date < oldestDateInView);
+    const incBefore = txsBeforeView.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+    const expBefore = txsBeforeView.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
+    let runningBalance = totalInitialBalance + incBefore - expBefore;
+
     const trendData = dates.map(date => {
         const dayTxs = transactions.filter(t => t.date === date);
         const inc = dayTxs.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
         const exp = dayTxs.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+
         runningBalance += (inc - exp);
+
         return { date: date.slice(5), income: inc, expense: exp, balance: runningBalance };
     });
 
@@ -56,6 +76,10 @@ export default function Dashboard() {
         position: 'relative',
         overflow: 'hidden'
     });
+
+    const isShowPie = activeMetric === 'expense' || activeMetric === 'income';
+    const currentPieData = activeMetric === 'income' ? incomePieData : expensePieData;
+    const currentPieTitle = activeMetric === 'income' ? 'Distribusi Pemasukan' : 'Distribusi Pengeluaran';
 
     return (
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
@@ -110,8 +134,8 @@ export default function Dashboard() {
                 </div>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: activeMetric === 'expense' ? 'repeat(auto-fit, minmax(300px, 1fr))' : '1fr', gap: 20 }}>
-                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '28px', boxShadow: 'var(--shadow)', gridColumn: activeMetric === 'expense' ? 'span 1' : '1 / -1' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isShowPie ? 'repeat(auto-fit, minmax(300px, 1fr))' : '1fr', gap: 20 }}>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '28px', boxShadow: 'var(--shadow)', gridColumn: isShowPie ? 'span 1' : '1 / -1' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                         <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)' }}>
                             {activeMetric === 'balance' ? 'Tren Saldo (14 Hari Terakhir)' : activeMetric === 'income' ? 'Grafik Pemasukan' : 'Grafik Pengeluaran'}
@@ -146,27 +170,27 @@ export default function Dashboard() {
                     )}
                 </div>
 
-                {activeMetric === 'expense' && (
+                {isShowPie && (
                     <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: '28px', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column' }}>
                         <h3 style={{ fontSize: 18, fontWeight: 600, color: 'var(--text)', marginBottom: 24 }}>
-                            Distribusi Kategori
+                            {currentPieTitle}
                         </h3>
-                        {expensePieData.length === 0 ? (
+                        {currentPieData.length === 0 ? (
                             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--muted)', fontSize: 14 }}>Tidak ada data</div>
                         ) : (
                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 20 }}>
                                 <div style={{ height: 180, width: '100%' }}>
                                     <ResponsiveContainer width="100%" height="100%">
                                         <PieChart>
-                                            <Pie data={expensePieData} innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" stroke="none">
-                                                {expensePieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                                            <Pie data={currentPieData} innerRadius={50} outerRadius={80} paddingAngle={4} dataKey="value" stroke="none">
+                                                {currentPieData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                                             </Pie>
                                             <Tooltip content={<CustomTooltip />} />
                                         </PieChart>
                                     </ResponsiveContainer>
                                 </div>
                                 <div style={{ overflowY: 'auto', maxHeight: 140, display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                    {[...expensePieData].sort((a, b) => b.value - a.value).map((d, i) => (
+                                    {[...currentPieData].sort((a, b) => b.value - a.value).map((d, i) => (
                                         <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', background: 'var(--bg)', borderRadius: 10, border: '1px solid var(--border)' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                                                 <div style={{ width: 10, height: 10, borderRadius: '3px', background: COLORS[i % COLORS.length] }} />
